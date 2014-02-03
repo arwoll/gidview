@@ -231,7 +231,7 @@ switch new_roi.type
         % Calculate intensity vs. depth for a certain energy range.  
 
         if length(d_roi) > 1
-            i_vs_e = sum(image(e_roi, d_roi), 2);
+            i_vs_e = double(sum(image(e_roi, d_roi), 2));
         else
             errordlg('For depth profile, ROI must contain more than one depth point');
             return
@@ -244,7 +244,7 @@ switch new_roi.type
             e_roi = 1:size(image,1);
         end
 
-        roi = image(e_roi, d_roi);
+        roi = double(image(e_roi, d_roi));
 
         if length(e_roi) == 1
             y = roi;
@@ -268,7 +268,7 @@ switch new_roi.type
                         showplots(chan, roi, peak_data.compare, peak_data.chi);
                     end
                 case {3,4}
-                    peak_data = find_peak(chan, i_vs_e, 'mode', mode, 'back', bkgd);
+                    %peak_data = find_peak(chan, i_vs_e, 'mode', mode, 'back', bkgd);
                     %ch_com = peak_data.com;
                     %fwhm = peak_data.fwhm;
                     peak_data = find_peak(chan, roi, 'mode', mode, 'back', bkgd);
