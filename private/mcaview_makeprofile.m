@@ -161,6 +161,7 @@ switch new_roi.type
             dstep = 1;
         end
         
+        i_vs_e = double(i_vs_e);
         chan = handles.scandata.channels(e_roi);
         
         switch bksub
