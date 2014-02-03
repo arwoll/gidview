@@ -1,0 +1,97 @@
+--- openmca.m	2014-02-03 14:25:20.000000000 -0500
++++ /Users/woll/Google Drive/CHESS_PLD/Matlab_PLD_AW/gidview_pld/openmca.m	2013-05-22 13:21:05.000000000 -0400
+@@ -199,13 +199,14 @@
+         end
+         matfile = [mcabase '.mat'];
+     case 'pilatus'
+-        MCA_Channels = 195;
+-        channels = (0:194)';
+         mcabase = mca_strip_pt(mcaname);  % mcabase has format 'specfile_scann'
+         [specfile, specscan] = mca_strip_pt(mcabase);
+         
+         % Both specfile and mcabase must be non-empty for us to assume that
+         % the requested mca file is one of a set.
++        if ~isempty(strfind(specfile, '_PIL4'))
++            specfile = strrep(specfile, '_PIL4', '');
++        end
+         if ~isempty(specfile)
+             mcafiles = dir(fullfile(mcapath,[mcabase '_*' extn]));
+             mcafiles = {mcafiles.name}';
+@@ -213,12 +214,16 @@
+             mcafiles = {mcafile};
+         end
+         nspectra = length(mcafiles);
++        short_axis_range = 50:160;   % For KDF
++        short_axis_bkgd = 50:(50+length(short_axis_range)-1);    % Same number of pixels as 
++        long_axis_range = 1:487;    % For KDF
++        MCA_Channels = length(long_axis_range);
++        channels = long_axis_range'-1;
+         mcadata = zeros(MCA_Channels, nspectra );
+         for spectra = 1:nspectra 
+             foo = double(imread(fullfile(mcapath,mcafiles{spectra})));
+-            %mcadata(:,spectra) = sum(foo(110:160, :), 1)';  For Loo Group,
+-            %Fall 2012 (GID geometry)
+-            mcadata(:,spectra) = sum(foo, 2); % For Baker Group, Nov 2012
++            bkgd = 0; %sum(foo(short_axis_bkgd, long_axis_range), 1);
++            mcadata(:,spectra) = sum(foo(short_axis_range, long_axis_range), 1) - bkgd;   
+         end
+         matfile = [mcabase '.mat'];
+ 
+@@ -320,16 +325,16 @@
+     end
+     spectra = scandata.spec.npts;
+ else
+-    if ~scandata.spec.complete
+-        % Truncate the mcadata to whole number of var2_n
+-        if spectra > scandata.spec.npts
+-            scandata.mcadata = scandata.mcadata(:, 1:scandata.spec.npts);
+-            scandata.depth = scandata.depth(1:scandata.spec.npts);
+-            spectra = scandata.spec.npts;
+-        elseif spectra < scandata.spec.npts
+-            fprintf('Fewer spectra than spec pts written -- sometimes happens when loading a current scan\n')
+-            scandata.spec.npts = specscan.spec.npts - 1;
+-        end
++    if spectra > scandata.spec.npts
++        scandata.mcadata = scandata.mcadata(:, 1:scandata.spec.npts);
++        scandata.depth = scandata.depth(1:scandata.spec.npts);
++        spectra = scandata.spec.npts;
++    elseif spectra < scandata.spec.npts
++        fprintf('Fewer spectra than spec pts written -- sometimes happens when loading a current scan\n')
++        scandata.spec.npts = spectra; %%specscan.spec.npts - 1;
++        scandata.spec.data = scandata.spec.data(:,1:spectra);
++        scandata.spec.size = spectra;
++        scandata.spec.var1 = scandata.spec.var1(1:spectra);
+     end
+     if length(scandims)>2
+         scandata.mcadata=reshape(scandata.mcadata, MCA_channels, scandims(2), scandims(3));
+@@ -400,30 +405,4 @@
+     save(fullmatfile,'scandata');
+ end
+ 
+-% More side effects : Save matrix and spec data to easy-read text files...
+-fullmtxfile = fullfile(mcapath, strrep(matfile, '.mat', '_array.txt'));
+-if save_choice
+-    f = fopen(fullmtxfile, 'wt');
+-    fprintf(f, '# Raw Data from Diode Array : 640 rows, one column per point in scan\n');
+-    fprintf(f, ['#S ' num2str(scandata.spec.scann) ' ' scandata.spec.scanline '\n']);
+-    fprintf(f, ['# Delta CALB A  B  C = ' num2str(scandata.spec.ecal) '\n']);
+-    fprintf(f, '# Counter I2 listed below\n');
+-    fprintf(f, ['# ' sprintf('%d\t', ...
+-        scandata.spec.data(strcmp(scandata.spec.headers, 'I2'), :)) '\n']);
+-    fprintf(f, ['# Scan variable ' scandata.spec.mot1 ' listed below\n']);
+-    fprintf(f, ['# '  sprintf('%5.3f\t', scandata.spec.var1) '\n']);
+-    fclose(f);
+-    outvar = double(scandata.mcadata);
+-    dlmwrite(fullmtxfile,outvar, 'delimiter', '\t', 'precision', '%d', '-append');
+-end
+-
+-fullscanfile = fullfile(mcapath, strrep(matfile, '.mat', '_scan.txt'));
+-if save_choice
+-    f = fopen(fullscanfile, 'wt');
+-    fprintf(f, '# Spec Data : Column headers on next line \n');
+-    fprintf(f, ['# '  sprintf( '%s\t', scandata.spec.headers{:}) '\n']);
+-    fclose(f);
+-    outvar = double(scandata.spec.data(1:end,:))';
+-    dlmwrite(fullscanfile,outvar, 'delimiter', '\t', 'precision', '%g', '-append');
+-end
+ 
