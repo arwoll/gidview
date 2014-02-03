@@ -199,13 +199,16 @@ switch mcaformat
         end
         matfile = [mcabase '.mat'];
     case 'pilatus'
-        MCA_Channels = 195;
-        channels = (0:194)';
+        sum_short_axis = 1;  
+        
         mcabase = mca_strip_pt(mcaname);  % mcabase has format 'specfile_scann'
         [specfile, specscan] = mca_strip_pt(mcabase);
         
         % Both specfile and mcabase must be non-empty for us to assume that
         % the requested mca file is one of a set.
+        if ~isempty(strfind(specfile, '_PIL4'))
+            specfile = strrep(specfile, '_PIL4', '');
+        end
         if ~isempty(specfile)
             mcafiles = dir(fullfile(mcapath,[mcabase '_*' extn]));
             mcafiles = {mcafiles.name}';
@@ -213,13 +216,31 @@ switch mcaformat
             mcafiles = {mcafile};
         end
         nspectra = length(mcafiles);
-        mcadata = zeros(MCA_Channels, nspectra );
-        for spectra = 1:nspectra 
-            foo = double(imread(fullfile(mcapath,mcafiles{spectra})));
-            %mcadata(:,spectra) = sum(foo(110:160, :), 1)';  For Loo Group,
-            %Fall 2012 (GID geometry)
-            mcadata(:,spectra) = sum(foo, 2); % For Baker Group, Nov 2012
+        
+        short_axis_range = 50:160; % For KDF  (largest possible range is 1:195 for pilatus)
+        short_axis_bkgd = 50:(50+length(short_axis_range)-1); % Same number of pixels as
+        long_axis_range = 1:487;   % For KDF
+        if sum_short_axis == 1
+            MCA_Channels = length(long_axis_range);
+            sum_index = 1;
+            channels = long_axis_range'-1;
+        else
+            MCA_Channels = length(short_axis_range);
+            sum_index = 2;
+            channels = short_axis_range'-1;
         end
+        
+        mcadata = zeros(MCA_Channels, nspectra );
+        for spectra = 1:nspectra
+            foo = double(imread(fullfile(mcapath,mcafiles{spectra})));
+            bkgd = 0;   % sum(foo(short_axis_bkgd, long_axis_range), 1);
+            mcadata(:,spectra) = sum(foo(short_axis_range, long_axis_range), sum_index) - bkgd;
+            
+            % mcadata(:,spectra) = sum(foo(110:160, :), 1)';  For Loo Group,
+            % Fall 2012 (GID geometry)
+            % mcadata(:,spectra) = sum(foo, 2); % For Baker Group, Nov 2012
+        end
+
         matfile = [mcabase '.mat'];
 
     otherwise
@@ -320,16 +341,16 @@ if isfield(scandata.spec, 'order')
     end
     spectra = scandata.spec.npts;
 else
-    if ~scandata.spec.complete
-        % Truncate the mcadata to whole number of var2_n
-        if spectra > scandata.spec.npts
-            scandata.mcadata = scandata.mcadata(:, 1:scandata.spec.npts);
-            scandata.depth = scandata.depth(1:scandata.spec.npts);
-            spectra = scandata.spec.npts;
-        elseif spectra < scandata.spec.npts
-            fprintf('Fewer spectra than spec pts written -- sometimes happens when loading a current scan\n')
-            scandata.spec.npts = specscan.spec.npts - 1;
-        end
+    if spectra > scandata.spec.npts
+        scandata.mcadata = scandata.mcadata(:, 1:scandata.spec.npts);
+        scandata.depth = scandata.depth(1:scandata.spec.npts);
+        spectra = scandata.spec.npts;
+    elseif spectra < scandata.spec.npts
+        fprintf('Fewer spectra than spec pts written -- sometimes happens when loading a current scan\n')
+        scandata.spec.npts = spectra; %%specscan.spec.npts - 1;
+        scandata.spec.data = scandata.spec.data(:,1:spectra);
+        scandata.spec.size = spectra;
+        scandata.spec.var1 = scandata.spec.var1(1:spectra);
     end
     if length(scandims)>2
         scandata.mcadata=reshape(scandata.mcadata, MCA_channels, scandims(2), scandims(3));
