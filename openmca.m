@@ -222,53 +222,6 @@ switch mcaformat
         end
         matfile = [mcabase '.mat'];
 
-    case {'chess1', 'chess3', 'chess_sp'}
-        [specfile, specscan] = mca_strip_pt(mcaname);
-        
-        if autodetect_channels
-            % Looks for first empty line...
-            MCA_channels = 0;
-            mcafid=fopen(mcafile, 'rt');
-            while ~feof(mcafid);
-                foo = fgetl(mcafid);
-                if length(foo)>0
-                    if foo(1) ~= '#'
-                        MCA_channels = MCA_channels+1;
-                    end
-                else
-                    break
-                end
-            end
-            fclose(mcafid);
-        end
-        
-        tic;
-        h = msgbox('Loading MCA data, please wait...(patiently)', 'Open', 'warn');
-        
-        
-        % textread is as much as 50% faster than textscan, but does not provide an
-        % unsigned 16-bit integer format. mcaview-0.99 switched from textread to textscan 
-        % mcadata = textread(mcafile, '%*d%f', 'commentstyle', 'shell');
-        mcafid = fopen(mcafile, 'rt');
-        mcadata = textscan(mcafid, '%*d%u16' ,'commentStyle', '#');
-        fclose(mcafid);
-        mcadata = mcadata{1};
-        close(h);
-        fprintf('mca file read elapsed:\n');
-        toc
-        channels = [0:(MCA_channels-1)]';
-        mcapts = length(mcadata);
-        spectra = floor(mcapts/MCA_channels);
-        if mod(mcapts,MCA_channels) ~= 0
-            % MCA data doesn't have an even number of spectra.
-            errors = add_error(errors, 2, ...
-                sprintf('Warning: mca data file %s has %d lines, not a multiple %g channels', ...
-                mcafile, mcapts, MCA_channels));
-            spectra = spectra - 1;
-            mcadata = mcadata(1:spectra*MCA_channels);
-        end
-        mcadata = reshape(mcadata, MCA_channels, spectra);
-        matfile = [mcaname '.mat'];
     otherwise
         errors=add_error(errors,1,...
             sprintf('Uncrecognized mca file format %s', mcaformat));
