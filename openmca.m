@@ -133,29 +133,6 @@ if any(strcmp(mcaformat, {'', 'chess1', 'chess3','chess_sp'}))
         mcaformat = {'spec', 'g2'};
     else
         warndlg('gidview only recognizes spec-like files...');
-%         if regexp(mcaname, '^[\w\.]+\.\d+')
-%             mcaformat = 'chess_sp';
-%         elseif regexp(mcaname, '^[\w\.]+_\d{3}')
-%             mcaformat = 'chess3';
-%         elseif regexp(mcaname, '^[\w\.]+_\d+')
-%             mcaformat = 'chess1';
-%         end
-%         if strcmp(first(1:2), '#M')
-%             [field, rem] = strtok(first(2:end));
-%             if any(strcmp(field, {'MCA_NAME', 'MCA_NAME:'}))
-%                 dead.key = strtok(rem);
-%                 first = fgetl(mcafid);
-%                 [field, rem] = strtok(first(2:end));
-%             end
-%             if any(strcmp(field, {'MCA_CHAN','MCA_CHAN:','MCA:'}))
-%                 MCA_channels = strread(rem, '%d');
-%                 autodetect_channels = 0;
-%             else
-%                 autodect_channels = 1;
-%             end
-%         else
-%             autodetect_channels = 1;
-%         end
     end
     fclose(mcafid);
 end
