@@ -208,6 +208,10 @@ switch mcaformat
         % the requested mca file is one of a set.
         if ~isempty(strfind(specfile, '_PIL4'))
             specfile = strrep(specfile, '_PIL4', '');
+        elseif ~isempty(strfind(specfile, '_PIL6'))
+            specfile = strrep(specfile, '_PIL6', '');
+        elseif ~isempty(strfind(specfile, '_PIL1'))
+            specfile = strrep(specfile, '_PIL1', '');           
         end
         if ~isempty(specfile)
             mcafiles = dir(fullfile(mcapath,[mcabase '_*' extn]));
@@ -217,8 +221,8 @@ switch mcaformat
         end
         nspectra = length(mcafiles);
         
-        short_axis_range = 50:160; % For KDF  (largest possible range is 1:195 for pilatus)
-        short_axis_bkgd = 50:(50+length(short_axis_range)-1); % Same number of pixels as
+        short_axis_range = 32:52; % For KDF  (largest possible range is 1:195 for pilatus)
+        %short_axis_bkgd = 50:(50+length(short_axis_range)-1); % Same number of pixels as
         long_axis_range = 1:487;   % For KDF
         if sum_short_axis == 1
             MCA_Channels = length(long_axis_range);
