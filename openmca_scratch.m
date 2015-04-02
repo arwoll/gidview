@@ -106,6 +106,8 @@ for k = 1:2:nvarargin
             %          chess3 (all scan spectra in file <specfile>_###.mca)
             %          chess1_sp (special format <specfile>_#.#.mca for
             %          multiple mcas)
+            %          f3 (all scan spectra in a single, spec-style mca
+            %          file <specfile>.scan<N>.<mcaid>.mca
             mcaformat = varargin{k+1};
         case 'scan'
             specscan = varargin{k+1};
@@ -120,19 +122,36 @@ end
 
 [mcapath, mcaname, extn] = fileparts(mcafile);
 
-if any(strcmp(extn, {'.tiff', '.tif'}))
-    mcaformat = 'pilatus';
-    dead.key = 'no_dtcorr';
-end
-
-if any(strcmp(mcaformat, {'', 'chess1', 'chess3','chess_sp'}))
+if any(strcmp(mcaformat, {'', 'chess1', 'chess3','chess_sp'}))  %Why not spec, g2, f3 here??
     mcafid = fopen(mcafile, 'rt');
     first = fgetl(mcafid);
     if strcmp(first(1:2), '#F')
         % This is an mca file with spec info.  Prompt for which type...
-        mcaformat = {'spec', 'g2'};
+        mcaformat = {'spec', 'g2', 'f3'};
     else
-        warndlg('gidview only recognizes spec-like files...');
+        if regexp(mcaname, '^[\w\.]+\.\d+')
+            mcaformat = 'chess_sp';
+        elseif regexp(mcaname, '^[\w\.]+_\d{3}')
+            mcaformat = 'chess3';
+        elseif regexp(mcaname, '^[\w\.]+_\d+')
+            mcaformat = 'chess1';
+        end
+        if strcmp(first(1:2), '#M')
+            [field, rem] = strtok(first(2:end));
+            if any(strcmp(field, {'MCA_NAME', 'MCA_NAME:'}))
+                dead.key = strtok(rem);
+                first = fgetl(mcafid);
+                [field, rem] = strtok(first(2:end));
+            end
+            if any(strcmp(field, {'MCA_CHAN','MCA_CHAN:','MCA:'}))
+                MCA_channels = strread(rem, '%d');
+                autodetect_channels = 0;
+            else
+                autodect_channels = 1;
+            end
+        else
+            autodetect_channels = 1;
+        end
     end
     fclose(mcafid);
 end
@@ -149,6 +168,7 @@ if iscell(mcaformat) || isempty(dead.key) || ...
         (strcmp(dead.key,'vortex') && ~isfield(dead, 'chan')) || ...
         (strcmp(dead.key, 'generic') && ...
             (~isfield(dead, 'chan') || ~isfield(dead, 'pulse_freq')))
+        
         [mcaformat, dead] = openmca_settingsdlg(mcaformat, dead);
 end
 
@@ -198,30 +218,6 @@ switch mcaformat
                 MCA_channels, 'commentstyle' ,'shell', 'whitespace', ' \b\t@A\\');
         end
         matfile = [mcabase '.mat'];
-    case 'pilatus'
-        MCA_Channels = 195;
-        channels = (0:194)';
-        mcabase = mca_strip_pt(mcaname);  % mcabase has format 'specfile_scann'
-        [specfile, specscan] = mca_strip_pt(mcabase);
-        
-        % Both specfile and mcabase must be non-empty for us to assume that
-        % the requested mca file is one of a set.
-        if ~isempty(specfile)
-            mcafiles = dir(fullfile(mcapath,[mcabase '_*' extn]));
-            mcafiles = {mcafiles.name}';
-        else
-            mcafiles = {mcafile};
-        end
-        nspectra = length(mcafiles);
-        mcadata = zeros(MCA_Channels, nspectra );
-        for spectra = 1:nspectra 
-            foo = double(imread(fullfile(mcapath,mcafiles{spectra})));
-            %mcadata(:,spectra) = sum(foo(110:160, :), 1)';  For Loo Group,
-            %Fall 2012 (GID geometry)
-            mcadata(:,spectra) = sum(foo, 2); % For Baker Group, Nov 2012
-        end
-        matfile = [mcabase '.mat'];
-
     case {'chess1', 'chess3', 'chess_sp'}
         [specfile, specscan] = mca_strip_pt(mcaname);
         
@@ -342,12 +338,9 @@ scandata.dead = dead;
 scandata.depth = 1:size(mcadata, 2);
 scandata.channels = channels; 
 scandata.mcafile = [mcaname extn];
-if isfield(scandata.spec, 'ecal')
-    scandata.ecal = scandata.spec.ecal;
-    scandata.energy = channel2energy(scandata.channels, scandata.ecal);
-else
-    scandata.energy = channels;
-end
+scandata.ecal = ecal;
+scandata.energy = channel2energy(scandata.channels, ecal);
+
 
 scandims = size(scandata.spec.data);
 if isfield(scandata.spec, 'order')
@@ -390,18 +383,9 @@ if spectra ~= scandata.spec.npts
     % does not match the number of mca spectra.  This is distinct from an
     % incomplete scan, in which case these values should match but
     % scandata.spec.complete == 0 so that the condition is caught above
-    %
-    % Nov 2012 : If a scan is interrupted, Pilatus will continue to write
-    % an extra spectrum. Solution is to truncate mcadata
-    if scandata.spec.complete < 1 && scandata.spec.npts < spectra
-        spectra = scandata.spec.npts;
-        scandata.mcadata = scandata.mcadata(:, 1:spectra);
-    else
-
-        errors=add_error(errors, 1, ...
-            sprintf('Error: mcafile / specfile mismatch. Check %s for duplicate scans',specfile));
-        return
-    end
+    errors=add_error(errors, 1, ...
+        sprintf('Error: mcafile / specfile mismatch. Check %s for duplicate scans',specfile));
+    return
 end
 
 scandata.specfile = specfile;
@@ -415,41 +399,26 @@ catch
     return;
 end
 
-% Side effect of importing data is to save the scandata struct to matlab
-% binary file
-
-fullmatfile = fullfile(pwd, matfile);
-[matfile, matfilepath] = uiputfile('*',...
-    'Save Scan to Matfile', fullmatfile);
-if ischar(matfile)
-    save(fullfile(matfilepath, matfile),'scandata');
+% Look for & input names of image file(s). This was implemented in April 05
+% to take advantage of a fram grabber running from spec.
+imagefile = strrep(matfile, '.mat', '.jpg');
+if exist(fullfile(mcapath,imagefile), 'file')
+%    scandata.image = imagefile);
+%    [path name extn] =fileparts(imagefile);
+    scandata.image = {imagefile};
+    if length(scandims)>2
+        for k=1:scandims(3)
+            nextimage = strrep(imagefile, '.jpg', sprintf('_%g.jpg',k));
+            if exist(fullfile(mcapath, nextimage), 'file')
+                scandata.image{k}=nextimage;
+            end
+        end
+    end
 end
 
-save_choice = 0;
-% More side effects : Save matrix and spec data to easy-read text files...
-fullmtxfile = fullfile(matfilepath, strrep(matfile, '.mat', '_array.txt'));
-if save_choice
-    f = fopen(fullmtxfile, 'wt');
-    fprintf(f, '# Raw Data from Diode Array : 640 rows, one column per point in scan\n');
-    fprintf(f, ['#S ' num2str(scandata.spec.scann) ' ' scandata.spec.scanline '\n']);
-    fprintf(f, ['# Delta CALB A  B  C = ' num2str(scandata.spec.ecal) '\n']);
-    fprintf(f, '# Counter I2 listed below\n');
-    fprintf(f, ['# ' sprintf('%d\t', ...
-        scandata.spec.data(strcmp(scandata.spec.headers, 'I2'), :)) '\n']);
-    fprintf(f, ['# Scan variable ' scandata.spec.mot1 ' listed below\n']);
-    fprintf(f, ['# '  sprintf('%5.3f\t', scandata.spec.var1) '\n']);
-    fclose(f);
-    outvar = double(scandata.mcadata);
-    dlmwrite(fullmtxfile,outvar, 'delimiter', '\t', 'precision', '%d', '-append');
+%fullmatfile = fullfile(mcapath, matfile);
+fullmatfile = uiputfile('*',...
+    'Save Scan to Matfile', matfile);
+if ischar(fullmatfile)
+    save(fullmatfile,'scandata');
 end
-
-fullscanfile = fullfile(matfilepath, strrep(matfile, '.mat', '_scan.txt'));
-if save_choice
-    f = fopen(fullscanfile, 'wt');
-    fprintf(f, '# Spec Data : Column headers on next line \n');
-    fprintf(f, ['# '  sprintf( '%s\t', scandata.spec.headers{:}) '\n']);
-    fclose(f);
-    outvar = double(scandata.spec.data(1:end,:))';
-    dlmwrite(fullscanfile,outvar, 'delimiter', '\t', 'precision', '%g', '-append');
-end
-
