@@ -64,7 +64,7 @@ else
 end
 
 if nargout > 1
-    varargout{1} = errors(end).code
+    varargout{1} = errors(end).code;
 end
 
 switch errors(end).code
