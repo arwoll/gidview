@@ -65,7 +65,7 @@ peak_data = find_peak(x, sampley, 'mode', 'lin', 'back', [1 length(sampley)]);
 
 delsq = sampley;
 mx = max(delsq);
-delsq(find(delsq<=0)) = mx;
+delsq(delsq<=0) = mx;
 
 wts = (1./delsq);
 
@@ -128,7 +128,7 @@ for k = 1:nspectra
     if mx == 0
         mx = 1;
     end
-    delsq(find(delsq<=0)) = mx;
+    delsq(delsq<=0) = mx;
     wts = 1./delsq;
     if strcmp(mode, 'lin')
         set(lin_opts, 'Weights', wts);

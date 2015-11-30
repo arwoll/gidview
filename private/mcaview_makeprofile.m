@@ -162,7 +162,8 @@ switch new_roi.type
         end
         
         i_vs_e = double(i_vs_e);
-        chan = handles.scandata.channels(e_roi);
+%        chan = handles.scandata.channels(e_roi);
+        chan = handles.scandata.energy(e_roi);
         
         switch bksub
             case 1
@@ -238,7 +239,8 @@ switch new_roi.type
             return
         end
         
-        chan = handles.scandata.channels(e_roi);
+%        chan = handles.scandata.channels(e_roi);
+        chan = handles.scandata.energy(e_roi);
         if box == 2
             d_roi = 1:size(image,2);
         elseif box == 3
